@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlashMind - Cloud-Synced Flashcard App</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.4); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 0.6); }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-full flex flex-col transition-colors duration-200">
+
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 lg:px-8 py-3 transition-colors">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <!-- Logo -->
+            <div class="flex items-center gap-3 cursor-pointer" onclick="app.showHome()">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                    <i data-lucide="layers" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl tracking-tight leading-none bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-500 dark:to-indigo-400 bg-clip-text text-transparent">FlashMind</h1>
+                    <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        <span id="sync-status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <span id="sync-status-text">Connecting cloud...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Actions -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button onclick="app.openFolderModal()" class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <i data-lucide="folder-plus" class="w-4 h-4 text-brand-600 dark:text-brand-400"></i>
+                    <span class="hidden sm:inline">New Folder</span>
+                </button>
+
+                <button onclick="app.openSetEditor()" class="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 rounded-xl transition shadow-sm shadow-brand-500/30 active:scale-95 cursor-pointer">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Create Set</span>
+                </button>
+
+                <!-- Auth / Profile Indicator -->
+                <button id="auth-btn" onclick="app.toggleAuth()" class="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    <i data-lucide="user" class="w-4 h-4 text-slate-500"></i>
+                    <span id="auth-btn-text">Guest Sync</span>
+                </button>
+
+                <!-- Dark Mode Toggle -->
+                <button onclick="app.toggleTheme()" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer" title="Toggle Theme">
+                    <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                    <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="app-container" class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- VIEW 1: HOME / LIBRARY VIEW -->
+        <section id="view-home" class="space-y-8">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight">Cloud Library</h2>
+                    <p class="text-slate-500 dark:text-slate-400 text-sm">Synced across all your connected devices in real time</p>
+                </div>
+                
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <div class="relative flex-1 md:w-72">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="library-search" oninput="app.renderLibrary()" placeholder="Search sets or cards..." class="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/50 shadow-sm transition">
+                    </div>
+                </div>
+            </div>
+
+            <div id="folder-bar" class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-200 dark:border-slate-800">
+                <!-- Dynamically populated folders -->
+            </div>
+
+            <div id="sets-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <!-- Dynamically populated study sets -->
+            </div>
+
+            <div id="empty-state" class="hidden flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-white/50 dark:bg-slate-900/50">
+                <div class="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-slate-800 text-brand-600 dark:text-brand-400 flex items-center justify-center mb-4">
+                    <i data-lucide="cloud-off" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-1">No Study Sets Found</h3>
+                <p class="text-slate-500 dark:text-slate-400 text-sm max-w-sm mb-6">Create your first set with custom images and text to start studying.</p>
+                <button onclick="app.openSetEditor()" class="px-5 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition shadow-sm">
+                    Create New Set
+                </button>
+            </div>
+        </section>
+
+        <section id="view-editor" class="hidden max-w-4xl mx-auto space-y-6">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+                <button onclick="app.showHome()" class="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Library
+                </button>
+                <div class="flex items-center gap-3">
+                    <button onclick="app.saveCurrentSet()" class="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm rounded-xl shadow-md shadow-brand-500/20 transition cursor-pointer">
+                        <i data-lucide="cloud-upload" class="w-4 h-4"></i> Save to Cloud
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Set Title</label>
+                    <input type="text" id="editor-title" placeholder="e.g. Organic Chemistry Reactions" class="w-full text-xl font-bold bg-transparent border-b-2 border-slate-200 dark:border-slate-800 focus:border-brand-500 outline-none pb-2 transition">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Folder</label>
+                    <select id="editor-folder" class="w-full sm:w-64 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none">
+                        <option value="">Unfiled (Default)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-lg">Flashcards (<span id="editor-card-count">0</span>)</h3>
+                    <p class="text-xs text-slate-400 flex items-center gap-1">
+                        <i data-lucide="info" class="w-3.5 h-3.5"></i> Direct Clipboard Paste Supported (Ctrl+V / Cmd+V)
+                    </p>
+                </div>
+
+                <div id="editor-cards-list" class="space-y-4">
+                    <!-- Dynamic Flashcard Creation Cards -->
+                </div>
+
+                <button onclick="app.addCardToEditor()" class="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-brand-500 rounded-2xl text-slate-600 dark:text-slate-300 font-semibold text-sm flex items-center justify-center gap-2 transition cursor-pointer">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-brand-500"></i> Add New Flashcard
+                </button>
+            </div>
+        </section>
+
+        <section id="view-study" class="hidden max-w-3xl mx-auto space-y-6">
+            <div class="flex items-center justify-between">
+                <button onclick="app.showHome()" class="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i> Exit Session
+                </button>
+                <div class="flex items-center gap-3">
+                    <button onclick="app.toggleShuffle()" id="study-shuffle-btn" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        <i data-lucide="shuffle" class="w-3.5 h-3.5"></i> Shuffle
+                    </button>
+                    <span id="study-progress-text" class="text-sm font-bold text-brand-600 dark:text-brand-400">Card 1 / 10</span>
+                </div>
+            </div>
+
+            <div class="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div id="study-progress-bar" class="h-full bg-brand-500 transition-all duration-300" style="width: 10%;"></div>
+            </div>
+
+            <div class="perspective-1000 w-full min-h-[380px] sm:min-h-[440px] cursor-pointer" onclick="app.flipCard()">
+                <div id="flashcard-inner" class="relative w-full h-full min-h-[380px] sm:min-h-[440px] transition-transform duration-500 transform-style-3d shadow-xl rounded-3xl">
+                    <div class="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col justify-between select-none">
+                        <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-slate-400">
+                            <span>Question</span>
+                            <span class="flex items-center gap-1"><i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Click to Flip</span>
+                        </div>
+                        <div class="my-auto text-center space-y-4">
+                            <img id="study-front-img" class="hidden max-h-48 sm:max-h-56 mx-auto rounded-xl object-contain border border-slate-100 dark:border-slate-800 shadow-sm" src="" alt="Question Image">
+                            <p id="study-front-text" class="text-xl sm:text-2xl font-medium text-slate-800 dark:text-slate-100 leading-relaxed"></p>
+                        </div>
+                        <div class="text-center text-xs text-slate-400 font-medium">
+                            Spacebar or Click to reveal answer
+                        </div>
+                    </div>
+
+                    <div class="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-slate-900 text-white border-2 border-brand-500/30 rounded-3xl p-6 sm:p-8 flex flex-col justify-between select-none shadow-2xl">
+                        <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-brand-400">
+                            <span>Answer</span>
+                            <span class="flex items-center gap-1"><i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Flip Back</span>
+                        </div>
+                        <div class="my-auto text-center space-y-4">
+                            <img id="study-back-img" class="hidden max-h-48 sm:max-h-56 mx-auto rounded-xl object-contain border border-slate-700 shadow-sm" src="" alt="Answer Image">
+                            <p id="study-back-text" class="text-xl sm:text-2xl font-medium text-slate-100 leading-relaxed"></p>
+                        </div>
+                        <div class="text-center text-xs text-slate-400 font-medium">
+                            Self-assess below to record result
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="study-assessment-controls" class="flex items-center justify-center gap-4 pt-2">
+                <button onclick="app.recordAnswer(false)" class="flex-1 max-w-xs py-3.5 px-6 rounded-2xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 font-bold border border-rose-200 dark:border-rose-900/50 flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-sm">
+                    <i data-lucide="x-circle" class="w-5 h-5"></i>
+                    <span>Incorrect (1 / ←)</span>
+                </button>
+                
+                <button onclick="app.recordAnswer(true)" class="flex-1 max-w-xs py-3.5 px-6 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-600 font-bold border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-sm">
+                    <i data-lucide="check-circle" class="w-5 h-5"></i>
+                    <span>Correct (2 / →)</span>
+                </button>
+            </div>
+        </section>
+
+        <section id="view-results" class="hidden max-w-3xl mx-auto space-y-8">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-sm">
+                <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-brand-50 dark:bg-slate-800 text-brand-600 dark:text-brand-400 mb-2">
+                    <i data-lucide="award" class="w-10 h-10"></i>
+                </div>
+                
+                <div>
+                    <h2 class="text-3xl font-extrabold tracking-tight">Session Complete!</h2>
+                    <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Results synced to your cloud analytics</p>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 max-w-md mx-auto pt-2">
+                    <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <p class="text-2xl font-black text-brand-600 dark:text-brand-400" id="result-score-percent">0%</p>
+                        <p class="text-xs text-slate-400 font-medium">Accuracy</p>
+                    </div>
+                    <div class="bg-emerald-50 dark:bg-emerald-950/30 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                        <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400" id="result-correct-count">0</p>
+                        <p class="text-xs text-emerald-600/70 font-medium">Correct</p>
+                    </div>
+                    <div class="bg-rose-50 dark:bg-rose-950/30 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30">
+                        <p class="text-2xl font-black text-rose-600 dark:text-rose-400" id="result-incorrect-count">0</p>
+                        <p class="text-xs text-rose-600/70 font-medium">Incorrect</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-center gap-3 pt-4">
+                    <button onclick="app.showHome()" class="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 font-semibold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        Back to Library
+                    </button>
+                    <button id="retest-mistakes-btn" onclick="app.retestMistakes()" class="hidden px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm shadow-md transition cursor-pointer">
+                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1.5"></i> Retest Mistakes Only
+                    </button>
+                    <button onclick="app.startStudySession(app.currentStudySetId)" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm shadow-md transition cursor-pointer">
+                        Restart Full Deck
+                    </button>
+                </div>
+            </div>
+
+            <div id="mistakes-review-section" class="space-y-4">
+                <h3 class="font-bold text-lg flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                    <i data-lucide="alert-circle" class="w-5 h-5"></i> Review Incorrect Cards
+                </h3>
+                <div id="mistakes-list" class="space-y-3">
+                    <!-- Dynamic Missed Cards -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="folder-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-lg">Create New Folder</h3>
+                <button onclick="app.closeFolderModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Folder Name</label>
+                <input type="text" id="folder-name-input" placeholder="e.g. Computer Science 101" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="app.closeFolderModal()" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl">Cancel</button>
+                <button onclick="app.saveFolder()" class="px-4 py-2 text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white rounded-xl">Save Folder</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            deleteDoc, 
+            collection, 
+            onSnapshot 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global app context
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'flashmind-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : { apiKey: "demo", authDomain: "demo", projectId: "demo" };
+
+        class FlashMindCloudApp {
+            constructor() {
+                this.db = null;
+                this.auth = null;
+                this.user = null;
+                this.sets = [];
+                this.folders = [];
+                this.activeFolder = 'ALL';
+
+                // Editor & Study States
+                this.editingSetId = null;
+                this.editingCards = [];
+                this.currentStudySetId = null;
+                this.studyQueue = [];
+                this.currentIndex = 0;
+                this.isFlipped = false;
+                this.sessionResults = { correct: [], incorrect: [] };
+
+                this.initFirebase();
+                this.setupKeyboardListeners();
+            }
+
+            async initFirebase() {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    this.auth = getAuth(app);
+                    this.db = getFirestore(app);
+
+                    // Auth Rule 3 Implementation
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(this.auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(this.auth);
+                    }
+
+                    onAuthStateChanged(this.auth, (user) => {
+                        if (user) {
+                            this.user = user;
+                            this.updateSyncBadge(true, 'Cloud Synced');
+                            this.attachFirestoreListeners();
+                        } else {
+                            this.updateSyncBadge(false, 'Offline Mode');
+                        }
+                    });
+                } catch (err) {
+                    console.warn('Firebase auto-config operating in local mode:', err);
+                    this.updateSyncBadge(false, 'Local Backup Active');
+                    this.loadLocalFallback();
+                }
+            }
+
+            updateSyncBadge(isConnected, text) {
+                const dot = document.getElementById('sync-status-dot');
+                const label = document.getElementById('sync-status-text');
+                const btnText = document.getElementById('auth-btn-text');
+
+                if (isConnected) {
+                    dot.className = "w-2 h-2 rounded-full bg-emerald-400";
+                    label.innerText = text;
+                    btnText.innerText = this.user ? `User: ${this.user.uid.substring(0,6)}...` : 'Connected';
+                } else {
+                    dot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+                    label.innerText = text;
+                }
+            }
+
+            attachFirestoreListeners() {
+                if (!this.user || !this.db) return;
+
+                // Path Rule 1: /artifacts/{appId}/users/{userId}/{collectionName}
+                const setsCol = collection(this.db, 'artifacts', appId, 'users', this.user.uid, 'flashcard_sets');
+                const foldersDoc = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'settings', 'folders');
+
+                // Realtime Sets Listener
+                onSnapshot(setsCol, (snapshot) => {
+                    this.sets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.renderLibrary();
+                }, (error) => {
+                    console.error("Firestore Sets Sync Error:", error);
+                });
+
+                // Realtime Folders Listener
+                onSnapshot(foldersDoc, (docSnap) => {
+                    if (docSnap.exists()) {
+                        this.folders = docSnap.data().list || [];
+                    } else {
+                        this.folders = ['Biology', 'Languages'];
+                        this.saveFoldersToCloud();
+                    }
+                    this.renderFolderTabs();
+                }, (error) => {
+                    console.error("Firestore Folders Sync Error:", error);
+                });
+            }
+
+            loadLocalFallback() {
+                this.sets = JSON.parse(localStorage.getItem('flashmind_sets')) || [];
+                this.folders = JSON.parse(localStorage.getItem('flashmind_folders')) || ['Biology', 'Languages'];
+                this.renderFolderTabs();
+                this.renderLibrary();
+            }
+
+            async saveSetToCloud(setData) {
+                if (this.user && this.db) {
+                    const setRef = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'flashcard_sets', setData.id);
+                    await setDoc(setRef, setData, { merge: true });
+                } else {
+                    localStorage.setItem('flashmind_sets', JSON.stringify(this.sets));
+                }
+            }
+
+            async saveFoldersToCloud() {
+                if (this.user && this.db) {
+                    const foldersRef = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'settings', 'folders');
+                    await setDoc(foldersRef, { list: this.folders });
+                } else {
+                    localStorage.setItem('flashmind_folders', JSON.stringify(this.folders));
+                }
+            }
+
+            toggleTheme() { document.documentElement.classList.toggle('dark'); }
+
+            showView(viewId) {
+                ['view-home', 'view-editor', 'view-study', 'view-results'].forEach(id => {
+                    document.getElementById(id).classList.add('hidden');
+                });
+                document.getElementById(viewId).classList.remove('hidden');
+                lucide.createIcons();
+            }
+
+            showHome() {
+                this.renderLibrary();
+                this.showView('view-home');
+            }
+
+            openFolderModal() {
+                document.getElementById('folder-name-input').value = '';
+                document.getElementById('folder-modal').classList.remove('hidden');
+                document.getElementById('folder-modal').classList.add('flex');
+            }
+
+            closeFolderModal() {
+                document.getElementById('folder-modal').classList.add('hidden');
+                document.getElementById('folder-modal').classList.remove('flex');
+            }
+
+            saveFolder() {
+                const name = document.getElementById('folder-name-input').value.trim();
+                if (name && !this.folders.includes(name)) {
+                    this.folders.push(name);
+                    this.saveFoldersToCloud();
+                    this.renderFolderTabs();
+                    this.closeFolderModal();
+                }
+            }
+
+            deleteFolder(folderName, e) {
+                e.stopPropagation();
+                if (confirm(`Delete folder "${folderName}"? Sets inside will become unfiled.`)) {
+                    this.folders = this.folders.filter(f => f !== folderName);
+                    this.sets.forEach(s => { 
+                        if (s.folder === folderName) {
+                            s.folder = '';
+                            this.saveSetToCloud(s);
+                        }
+                    });
+                    if (this.activeFolder === folderName) this.activeFolder = 'ALL';
+                    this.saveFoldersToCloud();
+                    this.renderFolderTabs();
+                    this.renderLibrary();
+                }
+            }
+
+            renderFolderTabs() {
+                const container = document.getElementById('folder-bar');
+                let html = `
+                    <button onclick="app.setFilterFolder('ALL')" class="px-4 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${this.activeFolder === 'ALL' ? 'bg-brand-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                        All Sets
+                    </button>
+                    <button onclick="app.setFilterFolder('UNFILED')" class="px-4 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${this.activeFolder === 'UNFILED' ? 'bg-brand-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                        Unfiled
+                    </button>
+                `;
+
+                this.folders.forEach(folder => {
+                    const isActive = this.activeFolder === folder;
+                    html += `
+                        <div class="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition cursor-pointer ${isActive ? 'bg-brand-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}" onclick="app.setFilterFolder('${folder}')">
+                            <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+                            <span>${folder}</span>
+                            <button onclick="app.deleteFolder('${folder}', event)" class="ml-1 hover:text-rose-300">
+                                <i data-lucide="x" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+                lucide.createIcons();
+            }
+
+            setFilterFolder(folder) {
+                this.activeFolder = folder;
+                this.renderFolderTabs();
+                this.renderLibrary();
+            }
+
+            renderLibrary() {
+                const query = document.getElementById('library-search').value.toLowerCase();
+                const container = document.getElementById('sets-grid');
+                const emptyState = document.getElementById('empty-state');
+
+                let filtered = this.sets.filter(s => {
+                    const matchesSearch = s.title.toLowerCase().includes(query) || (s.cards && s.cards.some(c => (c.frontText && c.frontText.toLowerCase().includes(query)) || (c.backText && c.backText.toLowerCase().includes(query))));
+                    const matchesFolder = this.activeFolder === 'ALL' ? true : (this.activeFolder === 'UNFILED' ? !s.folder : s.folder === this.activeFolder);
+                    return matchesSearch && matchesFolder;
+                });
+
+                filtered.sort((a, b) => (b.lastStudied || b.createdAt) - (a.lastStudied || a.createdAt));
+
+                if (filtered.length === 0) {
+                    container.innerHTML = '';
+                    emptyState.classList.remove('hidden');
+                    emptyState.classList.add('flex');
+                    return;
+                }
+
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+
+                container.innerHTML = filtered.map(set => {
+                    const accuracy = set.history && set.history.length > 0 ? Math.round(set.history[set.history.length - 1].accuracy) : null;
+                    const lastDate = set.lastStudied ? new Date(set.lastStudied).toLocaleDateString() : 'Never';
+
+                    return `
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-500/50 rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4">
+                            <div>
+                                <div class="flex items-start justify-between gap-2 mb-2">
+                                    <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                        ${set.folder || 'Unfiled'}
+                                    </span>
+                                    <div class="flex items-center gap-1">
+                                        <button onclick="app.openSetEditor('${set.id}')" class="p-1 text-slate-400 hover:text-brand-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                        </button>
+                                        <button onclick="app.deleteSet('${set.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <h3 class="font-bold text-lg text-slate-800 dark:text-slate-100 line-clamp-2 leading-snug">${set.title}</h3>
+                                <p class="text-xs text-slate-400 mt-1">${set.cards ? set.cards.length : 0} Cards • Studied ${lastDate}</p>
+                            </div>
+
+                            <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-3">
+                                <div class="flex justify-between items-center text-xs font-semibold">
+                                    <span class="text-slate-400">Historical Accuracy:</span>
+                                    ${accuracy !== null 
+                                        ? `<span class="${accuracy >= 80 ? 'text-emerald-500' : accuracy >= 50 ? 'text-amber-500' : 'text-rose-500'} font-bold">${accuracy}%</span>`
+                                        : `<span class="text-slate-400">No attempts</span>`
+                                    }
+                                </div>
+
+                                <div class="flex gap-2">
+                                    <button onclick="app.startStudySession('${set.id}')" class="flex-1 py-2 px-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer">
+                                        <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i> Study Now
+                                    </button>
+                                    <button onclick="app.openSetEditor('${set.id}')" class="p-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-300 transition">
+                                        <i data-lucide="plus" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                lucide.createIcons();
+            }
+
+            async deleteSet(setId) {
+                if (confirm('Are you sure you want to delete this study set from all synced devices?')) {
+                    if (this.user && this.db) {
+                        const setRef = doc(this.db, 'artifacts', appId, 'users', this.user.uid, 'flashcard_sets', setId);
+                        await deleteDoc(setRef);
+                    }
+                    this.sets = this.sets.filter(s => s.id !== setId);
+                    this.renderLibrary();
+                }
+            }
+
+            openSetEditor(setId = null) {
+                this.editingSetId = setId;
+                const folderSelect = document.getElementById('editor-folder');
+                
+                folderSelect.innerHTML = `<option value="">Unfiled (Default)</option>` + 
+                    this.folders.map(f => `<option value="${f}">${f}</option>`).join('');
+
+                if (setId) {
+                    const set = this.sets.find(s => s.id === setId);
+                    document.getElementById('editor-title').value = set.title;
+                    folderSelect.value = set.folder || '';
+                    this.editingCards = JSON.parse(JSON.stringify(set.cards || []));
+                } else {
+                    document.getElementById('editor-title').value = '';
+                    folderSelect.value = '';
+                    this.editingCards = [
+                        { id: Date.now().toString(), frontText: '', frontImg: '', backText: '', backImg: '' }
+                    ];
+                }
+
+                this.renderEditorCards();
+                this.showView('view-editor');
+            }
+
+            addCardToEditor() {
+                this.editingCards.push({
+                    id: Date.now().toString() + Math.random(),
+                    frontText: '',
+                    frontImg: '',
+                    backText: '',
+                    backImg: ''
+                });
+                this.renderEditorCards();
+            }
+
+            removeCardFromEditor(index) {
+                if (this.editingCards.length > 1) {
+                    this.editingCards.splice(index, 1);
+                    this.renderEditorCards();
+                } else {
+                    alert('A set must have at least one flashcard.');
+                }
+            }
+
+            renderEditorCards() {
+                document.getElementById('editor-card-count').innerText = this.editingCards.length;
+                const container = document.getElementById('editor-cards-list');
+
+                container.innerHTML = this.editingCards.map((card, idx) => `
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-400">
+                            <span>CARD #${idx + 1}</span>
+                            <button onclick="app.removeCardFromEditor(${idx})" class="hover:text-rose-500 transition">
+                                <i data-lucide="trash" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Front -->
+                            <div class="space-y-2">
+                                <label class="block text-xs font-semibold text-slate-500">Front (Question)</label>
+                                <textarea oninput="app.editingCards[${idx}].frontText = this.value" placeholder="Enter question..." class="w-full p-3 text-sm bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/40 h-24 resize-none">${card.frontText || ''}</textarea>
+                                
+                                <div id="card-${idx}-front-drop" class="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-brand-500 rounded-xl p-3 text-center transition cursor-pointer relative bg-slate-50/50 dark:bg-slate-800/30"
+                                     onpaste="app.handlePaste(event, ${idx}, 'front')"
+                                     onclick="document.getElementById('file-${idx}-front').click()">
+                                    
+                                    <input type="file" id="file-${idx}-front" class="hidden" accept="image/*" onchange="app.handleFileInput(event, ${idx}, 'front')">
+                                    
+                                    ${card.frontImg ? `
+                                        <div class="relative group">
+                                            <img src="${card.frontImg}" class="max-h-32 mx-auto rounded-lg object-contain">
+                                            <button onclick="event.stopPropagation(); app.removeImage(${idx}, 'front')" class="absolute top-1 right-1 bg-rose-600 text-white p-1 rounded-full text-xs shadow-md">
+                                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    ` : `
+                                        <div class="text-xs text-slate-400 py-2">
+                                            <i data-lucide="image" class="w-4 h-4 mx-auto mb-1 text-slate-400"></i>
+                                            <span>Click to upload or <b>Ctrl+V</b> to paste image</span>
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+
+                            <!-- Back -->
+                            <div class="space-y-2">
+                                <label class="block text-xs font-semibold text-slate-500">Back (Answer)</label>
+                                <textarea oninput="app.editingCards[${idx}].backText = this.value" placeholder="Enter answer..." class="w-full p-3 text-sm bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/40 h-24 resize-none">${card.backText || ''}</textarea>
+                                
+                                <div id="card-${idx}-back-drop" class="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-brand-500 rounded-xl p-3 text-center transition cursor-pointer relative bg-slate-50/50 dark:bg-slate-800/30"
+                                     onpaste="app.handlePaste(event, ${idx}, 'back')"
+                                     onclick="document.getElementById('file-${idx}-back').click()">
+                                    
+                                    <input type="file" id="file-${idx}-back" class="hidden" accept="image/*" onchange="app.handleFileInput(event, ${idx}, 'back')">
+                                    
+                                    ${card.backImg ? `
+                                        <div class="relative group">
+                                            <img src="${card.backImg}" class="max-h-32 mx-auto rounded-lg object-contain">
+                                            <button onclick="event.stopPropagation(); app.removeImage(${idx}, 'back')" class="absolute top-1 right-1 bg-rose-600 text-white p-1 rounded-full text-xs shadow-md">
+                                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    ` : `
+                                        <div class="text-xs text-slate-400 py-2">
+                                            <i data-lucide="image" class="w-4 h-4 mx-auto mb-1 text-slate-400"></i>
+                                            <span>Click to upload or <b>Ctrl+V</b> to paste image</span>
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+                lucide.createIcons();
+            }
+
+            handlePaste(e, idx, side) {
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                for (let item of items) {
+                    if (item.type.indexOf('image') !== -1) {
+                        e.preventDefault();
+                        const blob = item.getAsFile();
+                        this.readImageBlob(blob, (base64) => {
+                            if (side === 'front') this.editingCards[idx].frontImg = base64;
+                            else this.editingCards[idx].backImg = base64;
+                            this.renderEditorCards();
+                        });
+                        break;
+                    }
+                }
+            }
+
+            handleFileInput(e, idx, side) {
+                const file = e.target.files[0];
+                if (file) {
+                    this.readImageBlob(file, (base64) => {
+                        if (side === 'front') this.editingCards[idx].frontImg = base64;
+                        else this.editingCards[idx].backImg = base64;
+                        this.renderEditorCards();
+                    });
+                }
+            }
+
+            readImageBlob(blob, callback) {
+                const reader = new FileReader();
+                reader.onload = (e) => callback(e.target.result);
+                reader.readAsDataURL(blob);
+            }
+
+            removeImage(idx, side) {
+                if (side === 'front') this.editingCards[idx].frontImg = '';
+                else this.editingCards[idx].backImg = '';
+                this.renderEditorCards();
+            }
+
+            async saveCurrentSet() {
+                const title = document.getElementById('editor-title').value.trim();
+                const folder = document.getElementById('editor-folder').value;
+
+                if (!title) {
+                    alert('Please provide a title for this set.');
+                    return;
+                }
+
+                const setData = {
+                    id: this.editingSetId || Date.now().toString(),
+                    title: title,
+                    folder: folder,
+                    createdAt: this.editingSetId ? (this.sets.find(s=>s.id===this.editingSetId)?.createdAt || Date.now()) : Date.now(),
+                    lastStudied: this.editingSetId ? (this.sets.find(s=>s.id===this.editingSetId)?.lastStudied || null) : null,
+                    cards: this.editingCards,
+                    history: this.editingSetId ? (this.sets.find(s=>s.id===this.editingSetId)?.history || []) : []
+                };
+
+                await this.saveSetToCloud(setData);
+                this.showHome();
+            }
+
+            startStudySession(setId, mistakesOnly = false) {
+                const set = this.sets.find(s => s.id === setId);
+                if (!set || !set.cards || set.cards.length === 0) return;
+
+                this.currentStudySetId = setId;
+                if (mistakesOnly && this.sessionResults.incorrect.length > 0) {
+                    this.studyQueue = [...this.sessionResults.incorrect];
+                } else {
+                    this.studyQueue = [...set.cards];
+                }
+
+                this.currentIndex = 0;
+                this.isFlipped = false;
+                this.sessionResults = { correct: [], incorrect: [] };
+
+                this.renderStudyCard();
+                this.showView('view-study');
+            }
+
+            toggleShuffle() {
+                for (let i = this.studyQueue.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.studyQueue[i], this.studyQueue[j]] = [this.studyQueue[j], this.studyQueue[i]];
+                }
+                this.currentIndex = 0;
+                this.isFlipped = false;
+                this.renderStudyCard();
+            }
+
+            flipCard() {
+                this.isFlipped = !this.isFlipped;
+                const inner = document.getElementById('flashcard-inner');
+                if (this.isFlipped) {
+                    inner.classList.add('rotate-y-180');
+                } else {
+                    inner.classList.remove('rotate-y-180');
+                }
+            }
+
+            renderStudyCard() {
+                const card = this.studyQueue[this.currentIndex];
+                const total = this.studyQueue.length;
+
+                this.isFlipped = false;
+                document.getElementById('flashcard-inner').classList.remove('rotate-y-180');
+
+                document.getElementById('study-progress-text').innerText = `Card ${this.currentIndex + 1} / ${total}`;
+                document.getElementById('study-progress-bar').style.width = `${((this.currentIndex + 1) / total) * 100}%`;
+
+                // Front Face
+                const frontText = document.getElementById('study-front-text');
+                const frontImg = document.getElementById('study-front-img');
+                frontText.innerText = card.frontText || '';
+                if (card.frontImg) {
+                    frontImg.src = card.frontImg;
+                    frontImg.classList.remove('hidden');
+                } else {
+                    frontImg.classList.add('hidden');
+                }
+
+                // Back Face
+                const backText = document.getElementById('study-back-text');
+                const backImg = document.getElementById('study-back-img');
+                backText.innerText = card.backText || '';
+                if (card.backImg) {
+                    backImg.src = card.backImg;
+                    backImg.classList.remove('hidden');
+                } else {
+                    backImg.classList.add('hidden');
+                }
+            }
+
+            recordAnswer(isCorrect) {
+                const currentCard = this.studyQueue[this.currentIndex];
+                if (isCorrect) {
+                    this.sessionResults.correct.push(currentCard);
+                } else {
+                    this.sessionResults.incorrect.push(currentCard);
+                }
+
+                if (this.currentIndex + 1 < this.studyQueue.length) {
+                    this.currentIndex++;
+                    this.renderStudyCard();
+                } else {
+                    this.finishStudySession();
+                }
+            }
+
+            async finishStudySession() {
+                const set = this.sets.find(s => s.id === this.currentStudySetId);
+                const total = this.studyQueue.length;
+                const correctCount = this.sessionResults.correct.length;
+                const accuracy = Math.round((correctCount / total) * 100);
+
+                if (set) {
+                    set.lastStudied = Date.now();
+                    if (!set.history) set.history = [];
+                    set.history.push({ timestamp: Date.now(), accuracy: accuracy });
+                    await this.saveSetToCloud(set);
+                }
+
+                document.getElementById('result-score-percent').innerText = `${accuracy}%`;
+                document.getElementById('result-correct-count').innerText = correctCount;
+                document.getElementById('result-incorrect-count').innerText = this.sessionResults.incorrect.length;
+
+                const retestBtn = document.getElementById('retest-mistakes-btn');
+                const mistakesSection = document.getElementById('mistakes-review-section');
+                const mistakesList = document.getElementById('mistakes-list');
+
+                if (this.sessionResults.incorrect.length > 0) {
+                    retestBtn.classList.remove('hidden');
+                    mistakesSection.classList.remove('hidden');
+
+                    mistakesList.innerHTML = this.sessionResults.incorrect.map(card => `
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row justify-between gap-4">
+                            <div class="space-y-1 flex-1">
+                                <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Question</span>
+                                <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">${card.frontText || '(Image Question)'}</p>
+                            </div>
+                            <div class="space-y-1 flex-1 border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 pt-2 sm:pt-0 sm:pl-4">
+                                <span class="text-[10px] font-extrabold text-brand-500 uppercase tracking-wider">Correct Answer</span>
+                                <p class="text-sm font-medium text-slate-600 dark:text-slate-300">${card.backText || '(Image Answer)'}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    retestBtn.classList.add('hidden');
+                    mistakesSection.classList.add('hidden');
+                }
+
+                this.showView('view-results');
+            }
+
+            retestMistakes() {
+                this.startStudySession(this.currentStudySetId, true);
+            }
+
+            setupKeyboardListeners() {
+                window.addEventListener('keydown', (e) => {
+                    if (document.getElementById('view-study').classList.contains('hidden')) return;
+
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        this.flipCard();
+                    } else if (e.code === 'ArrowLeft' || e.key === '1') {
+                        this.recordAnswer(false);
+                    } else if (e.code === 'ArrowRight' || e.key === '2') {
+                        this.recordAnswer(true);
+                    }
+                });
+            }
+        }
+
+        window.onload = function() {
+            window.app = new FlashMindCloudApp();
+        };
+    </script>
+</body>
+</html>
