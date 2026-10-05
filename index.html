@@ -1617,20 +1617,6 @@
       }).join('');
     }
     
-    function deleteDeck(deckId) {
-  showConfirmation("Are you sure you want to delete this flashcard deck?", () => {
-    userDecks = userDecks.filter(deck => deck.id !== deckId);
-    saveDecksToStorage();
-    renderDecks();
-    renderFoldersUI();
-    showToast("Deck deleted successfully", "info");
-    if (currentUser && window.fbDb) {
-      const { doc, deleteDoc } = window.firebaseServices;
-      const deckDocRef = doc(window.fbDb, 'artifacts', window.appId, 'users', currentUser.uid, 'decks', deckId);
-      deleteDoc(deckDocRef).catch(err => console.error("Cloud Sync Deletion Error:", err));
-    }
-  });
-}
 
     /* ==========================================================================
        9. FIREBASE AUTH & SYNCHRONIZATION
