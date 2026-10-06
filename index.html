@@ -810,8 +810,57 @@
       </div>
     </div>
   </div>
-  
+
   <script>
+    function subscribeToCloudData() {
+      if (!currentUser || !window.fbDb) return;
+
+      const { collection, onSnapshot, doc } = window.firebaseServices;
+  
+      // 1. Listen to user's Decks collection
+      const decksRef = collection(window.fbDb, 'artifacts', window.appId, 'users', currentUser.uid, 'decks');
+  
+      onSnapshot(decksRef, (snapshot) => {
+        const cloudDecks = [];
+        snapshot.forEach((docSnap) => {
+          cloudDecks.push(docSnap.data());
+        });
+
+        if (cloudDecks.length > 0) {
+          userDecks = cloudDecks;
+          localStorage.setItem('flashmind_decks', JSON.stringify(userDecks));
+        renderDecks();
+        }
+      }, (error) => {
+        console.error("Error fetching decks from Firestore:", error);
+      });
+
+      // 2. Listen to meta documents (Folders & Documents)
+      const folderDocRef = doc(window.fbDb, 'artifacts', window.appId, 'users', currentUser.uid, 'meta', 'folders');
+      onSnapshot(folderDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.list) userFolders = data.list;
+          if (data.documents) folderDocuments = data.documents;
+          renderFoldersUI();
+        }
+      });
+   }
+    function saveDecksToStorage() {
+      localStorage.setItem('flashmind_decks', JSON.stringify(userDecks));
+      localStorage.setItem('flashmind_folders', JSON.stringify(userFolders));
+
+      if (currentUser && window.fbDb) {
+        const { doc, setDoc } = window.firebaseServices;
+        userDecks.forEach(deck => {
+          const deckDocRef = doc(window.fbDb, 'artifacts', window.appId, 'users', currentUser.uid, 'decks', deck.id);
+          setDoc(deckDocRef, deck).catch(err => {
+            console.error("Cloud Sync Error:", err);
+            showToast("Error syncing deck to cloud: Payload might be too large", "error");
+          });
+        });
+      }
+    }
     /* ==========================================================================
        MODAL UTILITY & CONFIRMATION DIALOG MECHANICS
        ========================================================================== */
