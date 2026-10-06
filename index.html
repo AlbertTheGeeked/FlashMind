@@ -202,7 +202,30 @@
       deleteDoc,
       onSnapshot
     };
+    window.onAuthStateChanged = onAuthStateChanged;
   </script>
+
+  <script>
+    window.handleGoogleSignIn = async () => {
+      await window.firebaseServices.signInWithGoogle();
+    };
+    // Auth State Listener
+    onAuthStateChanged(window.fbAuth, (user) => {
+      if (user) {
+        window.currentUser = user;
+        console.log("User signed in:", user.uid);
+        // Update badge / UI
+        const badge = document.getElementById('sync-badge');
+        if (badge) {
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span> ${user.displayName || 'Cloud Synced'}`;
+          badge.className = "inline-flex items-center px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+        }
+      } else {
+        window.currentUser = null;
+      }
+    });
+  </script>
+  
 </head>
 <body class="min-h-screen flex flex-col bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-x-hidden antialiased">
 
